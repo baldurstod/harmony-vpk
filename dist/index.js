@@ -21,6 +21,7 @@ class Vpk {
     #archives = [];
     #readers = new Map;
     #initialized = false;
+    #directoryDataOffset = 0;
     async setFiles(files) {
         return await this.#init(files);
     }
@@ -84,8 +85,10 @@ class Vpk {
         }
         // TODO: preload bytes
         let sourceFile;
+        let dataOffset = 0;
         if (fileInfo.archiveIndex == 0x7FFF) { // File is in directory
             sourceFile = this.#directory;
+            dataOffset = this.#directoryDataOffset;
         }
         else {
             sourceFile = this.#archives[fileInfo.archiveIndex];
@@ -97,7 +100,7 @@ class Vpk {
         if (!reader) {
             return { error: VpkError.InternalError };
         }
-        const bytes = reader.getBytes(fileInfo.entryLength, fileInfo.entryOffset);
+        const bytes = reader.getBytes(fileInfo.entryLength, fileInfo.entryOffset + dataOffset);
         const file = new File([bytes], filename);
         return { file: file };
     }
@@ -129,6 +132,7 @@ class Vpk {
         if (error) {
             return error;
         }
+        this.#directoryDataOffset = reader.tell();
         return null;
     }
     #readTree(reader) {

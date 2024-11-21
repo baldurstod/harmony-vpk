@@ -23,6 +23,7 @@ export class Vpk {
 	#archives: Array<File> = [];
 	#readers = new Map<File, BinaryReader>;
 	#initialized = false;
+	#directoryDataOffset = 0;
 
 	async setFiles(files: Array<File>): Promise<VpkError | null> {
 		return await this.#init(files);
@@ -91,8 +92,10 @@ export class Vpk {
 
 		// TODO: preload bytes
 		let sourceFile: File | undefined;
+		let dataOffset: number = 0;
 		if (fileInfo.archiveIndex == 0x7FFF) { // File is in directory
 			sourceFile = this.#directory;
+			dataOffset = this.#directoryDataOffset;
 		} else {
 			sourceFile = this.#archives[fileInfo.archiveIndex];
 		}
@@ -107,7 +110,7 @@ export class Vpk {
 			return { error: VpkError.InternalError };
 		}
 
-		const bytes = reader.getBytes(fileInfo.entryLength, fileInfo.entryOffset);
+		const bytes = reader.getBytes(fileInfo.entryLength, fileInfo.entryOffset + dataOffset);
 		const file = new File([bytes], filename);
 		return { file: file };
 	}
@@ -144,6 +147,7 @@ export class Vpk {
 		if (error) {
 			return error;
 		}
+		this.#directoryDataOffset = reader.tell();
 
 		return null;
 	}

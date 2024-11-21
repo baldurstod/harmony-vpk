@@ -16,3 +16,4 @@ if (error) {
 
 const file = await vpk.getFile('models/player/pyro.mdl');
 console.info(file);
+console.info(await vpk.getFileList());

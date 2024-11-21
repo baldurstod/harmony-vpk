@@ -101,6 +101,13 @@ class Vpk {
         const file = new File([bytes], filename);
         return { file: file };
     }
+    async getFileList() {
+        const list = new Set;
+        for (const [filename, _] of this.#files) {
+            list.add(filename);
+        }
+        return list;
+    }
     async #initDirectory() {
         if (!this.#directory) {
             return VpkError.NoDirectory;

@@ -78,8 +78,6 @@ export class Vpk {
 		return null
 	}
 
-
-
 	async getFile(filename: string): Promise<VpkFileResponse> {
 		if (!this.#initialized) {
 			return { error: VpkError.Uninitialized };
@@ -112,6 +110,14 @@ export class Vpk {
 		const bytes = reader.getBytes(fileInfo.entryLength, fileInfo.entryOffset);
 		const file = new File([bytes], filename);
 		return { file: file };
+	}
+
+	async getFileList(): Promise<Set<string>> {
+		const list = new Set<string>;
+		for (const [filename, _] of this.#files) {
+			list.add(filename);
+		}
+		return list;
 	}
 
 	async #initDirectory(): Promise<VpkError | null> {

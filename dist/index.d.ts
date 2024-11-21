@@ -2,6 +2,7 @@ export declare class Vpk {
     #private;
     setFiles(files: Array<File>): Promise<VpkError | null>;
     getFile(filename: string): Promise<VpkFileResponse>;
+    getFileList(): Promise<Set<string>>;
 }
 
 export declare enum VpkError {

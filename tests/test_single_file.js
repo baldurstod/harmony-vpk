@@ -6,10 +6,13 @@ const vpk = new Vpk();
 //const contents = await readFile('test/fbx/bin/textures.fbx');
 
 
-const file = await readAsset('hd_femme_pyro_swimsuit.vpk');
+const vpkFile = await readAsset('hd_femme_pyro_swimsuit.vpk');
 //console.info(file);
 
-const error = await vpk.setFiles([file]);
-console.info(error);
+const error = await vpk.setFiles([vpkFile]);
+if (error) {
+	console.info(error);
+}
 
-vpk.getFile('model/player/pyro.mdl');
+const file = await vpk.getFile('models/player/pyro.mdl');
+console.info(file);

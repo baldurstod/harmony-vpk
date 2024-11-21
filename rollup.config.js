@@ -20,6 +20,9 @@ export default [
 				}
 			},
 		],
+		external: [
+			'harmony-binary-reader',
+		]
 	},
 ];
 

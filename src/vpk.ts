@@ -1,5 +1,5 @@
 import { BinaryReader } from 'harmony-binary-reader';
-import { File } from 'node:buffer';
+//import { File } from 'node:buffer';
 
 export enum VpkError {
 	Ok = 0,
@@ -9,6 +9,9 @@ export enum VpkError {
 	UnknownFilename,
 	Uninitialized,
 	FormatError,
+	FileNotFound,
+	InvalidArchive,
+	InternalError,
 }
 
 export type VpkFileResponse = { file?: File, error?: VpkError };
@@ -20,16 +23,12 @@ export class Vpk {
 	#archives: Array<File> = [];
 	#readers = new Map<File, BinaryReader>;
 	#initialized = false;
-	//#initPromiseResolve?: (value: boolean) => void;
-	//#initPromise = new Promise(resolve => this.#initPromiseResolve = resolve);
 
 	async setFiles(files: Array<File>): Promise<VpkError | null> {
-		//this.#files = [...files];
 		return await this.#init(files);
 	}
 
 	async #init(files: Array<File>): Promise<VpkError | null> {
-		console.info('init');
 		this.#directory = undefined;
 		this.#archives = [];
 		this.#readers.clear();
@@ -59,7 +58,6 @@ export class Vpk {
 	}
 
 	async #initFiles(files: Array<File>): Promise<VpkError | null> {
-		console.info('initFiles');
 		for (const file of files) {
 			if (file.name.endsWith('_dir.vpk')) {
 				if (this.#directory) {
@@ -87,17 +85,32 @@ export class Vpk {
 			return { error: VpkError.Uninitialized };
 		}
 
-		//await this.#initPromise;
-
-		/*
-		const error = await this.#initDirectory();
-		if (error) {
-			return { error: error };
-		}*/
-
 		filename = cleanupFilename(filename);
-		const file = new File([], '');
+		const fileInfo = this.#files.get(filename);
+		if (!fileInfo) {
+			return { error: VpkError.FileNotFound };
+		}
 
+		// TODO: preload bytes
+		let sourceFile: File | undefined;
+		if (fileInfo.archiveIndex == 0x7FFF) { // File is in directory
+			sourceFile = this.#directory;
+		} else {
+			sourceFile = this.#archives[fileInfo.archiveIndex];
+		}
+
+		if (!sourceFile) {
+			return { error: VpkError.InvalidArchive };
+		}
+
+
+		const reader = await this.#getReader(sourceFile);
+		if (!reader) {
+			return { error: VpkError.InternalError };
+		}
+
+		const bytes = reader.getBytes(fileInfo.entryLength, fileInfo.entryOffset);
+		const file = new File([bytes], filename);
 		return { file: file };
 	}
 
@@ -119,17 +132,13 @@ export class Vpk {
 			const archiveMD5SectionSize = reader.getUint32();
 			const otherMD5SectionSize = reader.getUint32();
 			const signatureSectionSize = reader.getUint32();
-			console.info(treeSize, fileDataSectionSize, archiveMD5SectionSize, otherMD5SectionSize, signatureSectionSize);
 		}
 
-		//console.info(reader.getNullString());
 		const error = this.#readTree(reader);
 		if (error) {
 			return error;
 		}
 
-
-		//this.#initPromiseResolve?.(true);
 		return null;
 	}
 
@@ -145,22 +154,22 @@ export class Vpk {
 					break;
 				}
 				while (true) {
-					const filename = reader.getNullString();
+					let filename = reader.getNullString();
 					if (filename == '') {
 						break;
 					}
 					const fileinfo = this.#readFile(reader);
-					console.info(path + '/' + filename + '.' + extension, fileinfo);
+
+					filename = cleanupFilename(path + '/' + filename + '.' + extension);
+					this.#files.set(filename, fileinfo);
 				}
 			}
 		}
-
 		return null;
 	}
 
 	#readFile(reader: BinaryReader): VpkFileInfo {
 		const fileinfo = new VpkFileInfo();
-		console.info(reader.tell());
 		fileinfo.crc = reader.getUint32();
 		fileinfo.preloadBytes = reader.getUint16();
 		fileinfo.archiveIndex = reader.getUint16();

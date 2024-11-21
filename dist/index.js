@@ -1,6 +1,6 @@
 import { BinaryReader } from 'harmony-binary-reader';
-import { File } from 'node:buffer';
 
+//import { File } from 'node:buffer';
 var VpkError;
 (function (VpkError) {
     VpkError[VpkError["Ok"] = 0] = "Ok";
@@ -10,6 +10,9 @@ var VpkError;
     VpkError[VpkError["UnknownFilename"] = 4] = "UnknownFilename";
     VpkError[VpkError["Uninitialized"] = 5] = "Uninitialized";
     VpkError[VpkError["FormatError"] = 6] = "FormatError";
+    VpkError[VpkError["FileNotFound"] = 7] = "FileNotFound";
+    VpkError[VpkError["InvalidArchive"] = 8] = "InvalidArchive";
+    VpkError[VpkError["InternalError"] = 9] = "InternalError";
 })(VpkError || (VpkError = {}));
 const ArchiveRegEx = /(.*)_(\d*).vpk/;
 class Vpk {
@@ -18,14 +21,10 @@ class Vpk {
     #archives = [];
     #readers = new Map;
     #initialized = false;
-    //#initPromiseResolve?: (value: boolean) => void;
-    //#initPromise = new Promise(resolve => this.#initPromiseResolve = resolve);
     async setFiles(files) {
-        //this.#files = [...files];
         return await this.#init(files);
     }
     async #init(files) {
-        console.info('init');
         this.#directory = undefined;
         this.#archives = [];
         this.#readers.clear();
@@ -52,7 +51,6 @@ class Vpk {
         return null;
     }
     async #initFiles(files) {
-        console.info('initFiles');
         for (const file of files) {
             if (file.name.endsWith('_dir.vpk')) {
                 if (this.#directory) {
@@ -79,14 +77,28 @@ class Vpk {
         if (!this.#initialized) {
             return { error: VpkError.Uninitialized };
         }
-        //await this.#initPromise;
-        /*
-        const error = await this.#initDirectory();
-        if (error) {
-            return { error: error };
-        }*/
         filename = cleanupFilename(filename);
-        const file = new File([], '');
+        const fileInfo = this.#files.get(filename);
+        if (!fileInfo) {
+            return { error: VpkError.FileNotFound };
+        }
+        // TODO: preload bytes
+        let sourceFile;
+        if (fileInfo.archiveIndex == 0x7FFF) { // File is in directory
+            sourceFile = this.#directory;
+        }
+        else {
+            sourceFile = this.#archives[fileInfo.archiveIndex];
+        }
+        if (!sourceFile) {
+            return { error: VpkError.InvalidArchive };
+        }
+        const reader = await this.#getReader(sourceFile);
+        if (!reader) {
+            return { error: VpkError.InternalError };
+        }
+        const bytes = reader.getBytes(fileInfo.entryLength, fileInfo.entryOffset);
+        const file = new File([bytes], filename);
         return { file: file };
     }
     async #initDirectory() {
@@ -99,20 +111,17 @@ class Vpk {
             return VpkError.FormatError;
         }
         const version = reader.getUint32();
-        const treeSize = reader.getUint32();
+        reader.getUint32();
         if (version == 2) {
-            const fileDataSectionSize = reader.getUint32();
-            const archiveMD5SectionSize = reader.getUint32();
-            const otherMD5SectionSize = reader.getUint32();
-            const signatureSectionSize = reader.getUint32();
-            console.info(treeSize, fileDataSectionSize, archiveMD5SectionSize, otherMD5SectionSize, signatureSectionSize);
+            reader.getUint32();
+            reader.getUint32();
+            reader.getUint32();
+            reader.getUint32();
         }
-        //console.info(reader.getNullString());
         const error = this.#readTree(reader);
         if (error) {
             return error;
         }
-        //this.#initPromiseResolve?.(true);
         return null;
     }
     #readTree(reader) {
@@ -127,12 +136,13 @@ class Vpk {
                     break;
                 }
                 while (true) {
-                    const filename = reader.getNullString();
+                    let filename = reader.getNullString();
                     if (filename == '') {
                         break;
                     }
                     const fileinfo = this.#readFile(reader);
-                    console.info(path + '/' + filename + '.' + extension, fileinfo);
+                    filename = cleanupFilename(path + '/' + filename + '.' + extension);
+                    this.#files.set(filename, fileinfo);
                 }
             }
         }
@@ -140,7 +150,6 @@ class Vpk {
     }
     #readFile(reader) {
         const fileinfo = new VpkFileInfo();
-        console.info(reader.tell());
         fileinfo.crc = reader.getUint32();
         fileinfo.preloadBytes = reader.getUint16();
         fileinfo.archiveIndex = reader.getUint16();

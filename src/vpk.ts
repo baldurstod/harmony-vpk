@@ -1,5 +1,4 @@
 import { BinaryReader } from 'harmony-binary-reader';
-//import { File } from 'node:buffer';
 
 export enum VpkError {
 	Ok = 0,
@@ -111,7 +110,7 @@ export class Vpk {
 		}
 
 		const bytes = reader.getBytes(fileInfo.entryLength, fileInfo.entryOffset + dataOffset);
-		const file = new File([bytes], filename);
+		const file = new File([bytes.buffer as ArrayBuffer], filename);
 		return { file: file };
 	}
 
@@ -201,6 +200,10 @@ export class Vpk {
 			return reader;
 		}
 	}
+
+	hasFile(path: string): boolean {
+		return this.#files.has(path);
+	}
 }
 
 class VpkFileInfo {
@@ -212,7 +215,7 @@ class VpkFileInfo {
 }
 
 function cleanupFilename(filename: string): string {
-	filename = filename.toLowerCase().replaceAll('\\', '/');
+	filename = filename.toLowerCase().trim().replaceAll('\\', '/');
 	const arr = filename.split('/');
-	return arr.filter((path) => path != '').join('/');
+	return arr.filter((path) => path != '').join('/').replace(/^\//, '');
 }

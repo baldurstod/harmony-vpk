@@ -100,7 +100,7 @@ class Vpk {
             return { error: VpkError.InternalError };
         }
         const bytes = reader.getBytes(fileInfo.entryLength, fileInfo.entryOffset + dataOffset);
-        const file = new File([bytes.buffer], filename);
+        const file = new File([bytes], filename);
         return { file: file };
     }
     async getFileList() {

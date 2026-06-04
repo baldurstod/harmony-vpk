@@ -110,7 +110,7 @@ export class Vpk {
 		}
 
 		const bytes = reader.getBytes(fileInfo.entryLength, fileInfo.entryOffset + dataOffset);
-		const file = new File([bytes.buffer as ArrayBuffer], filename);
+		const file = new File([bytes as BlobPart], filename);
 		return { file: file };
 	}
 
